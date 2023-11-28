@@ -1,0 +1,4 @@
+FROM travelping/scapy:latest
+
+RUN mkdir /root/PCYB
+WORKDIR /root/PCYB

@@ -1,0 +1,7 @@
+FROM travelping/scapy:latest
+
+# Copying python files to image
+RUN mkdir /root/PCYB
+RUN mkdir /root/PCYB/src
+COPY ../src /root/PCYB/src
+WORKDIR /root/PCYB/src
