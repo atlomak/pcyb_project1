@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Necesarry to change if other shell is used
-
 # TODO add coloring of outputs
 # TODO add clearing whole infrastructure
 
@@ -28,13 +26,8 @@ case "$configuration_type" in
 	"2") # Preparing project environment
 
         # Creating network infrastructure
-        sysctl -w net.ipv4.ip_forward=0 # TODO check why it has to be configured like this
+        sysctl -w net.ipv4.ip_forward=0 # It has to be disabled because routing will be determined by IP and MAC (not only mAC like we want)
         docker network create --driver=bridge --subnet=10.0.0.0/24 --gateway=10.0.0.1 pcyb-network  # Creating virtual network that docker container can connect to
-        # TODO add checking if network exists
-
-        # Cleaning environment
-        docker rm -f $(docker ps -aq)    # removing all containers
-        docker rmi -f $(docker images -q)   # removing all images
 
         # Building images for hosts and running containers
         docker image build -f dockerfiles/normal-host-Dockerfile -t normal-host-image .
@@ -50,7 +43,7 @@ case "$configuration_type" in
         docker container list
         docker network list
 		;;
-	"3") # Managing hosts
+	"3") # Managing hosts - Get networking info
 
         # Getting information about IP and MAC addresses of hosts containers
         green_id=$(docker ps -q --filter "name=host-green")
@@ -58,15 +51,39 @@ case "$configuration_type" in
         red_id=$(docker ps -q --filter "name=host-red")
 
         echo -e "\nhost-green"
-        docker exec -it "$green_id" /bin/sh -c "ip a && arp"
+        docker exec -it "$green_id" /bin/sh -c "ip a"
         echo -e "\nhost-blue"
-        docker exec -it "$blue_id" /bin/sh -c "ip a && arp"
+        docker exec -it "$blue_id" /bin/sh -c "ip a"
         echo -e "\nhost-red"
-        docker exec -it "$red_id" /bin/sh -c "ip a && arp"
+        docker exec -it "$red_id" /bin/sh -c "ip a"
 
-        # ARP spoofing
-        # docker exec -it "$red_id" /bin/sh -c "python3 arpPoisoner.py eth0 10.0.0.100 10.0.0.101 &"
+        echo -e "\nhost-green"
+        docker exec -it "$green_id" /bin/sh -c "arp"
+        echo -e "\nhost-blue"
+        docker exec -it "$blue_id" /bin/sh -c "arp"
+        echo -e "\nhost-red"
+        docker exec -it "$red_id" /bin/sh -c "arp"
+        ;;
+    "4") # Managing hosts - ARP spoofing
+        
+        red_id=$(docker ps -q --filter "name=host-red")
+        docker exec -it "$red_id" /bin/sh -c "python3 Man-In-The-Middle.py eth0 10.0.0.100 10.0.0.101"
         # docker exec -it "$red_id" /bin/sh -c 'ps aux | grep "python3 arpPoisoner.py eth0 10.0.0.100 10.0.0.101" | grep -v grep | awk "{print \$1}" | xargs -r kill'
-		;;
+		
+        ;;  
+    "5") # Managing hosts - Transmitting packets through host-red
+
+        red_id=$(docker ps -q --filter "name=host-red")
+        docker exec -it "$red_id" /bin/sh -c "python3 Forwarding.py eth0 10.0.0.100 10.0.0.101"        
+        ;;
+    "6") # Cleanup
+        # Cleaning environment
+        red_id=$(docker ps -q --filter "name=host-red")
+        docker exec -it "$red_id" /bin/sh -c 'ps aux | grep "python3 Man-In-The-Middle.py eth0 10.0.0.100 10.0.0.101" | grep -v grep | awk "{print \$1}" | xargs -r kill'
+		docker exec -it "$red_id" /bin/sh -c 'ps aux | grep "python3 Forwarding.py eth0 10.0.0.100 10.0.0.101" | grep -v grep | awk "{print \$1}" | xargs -r kill'
+		
+        docker rm -f $(docker ps -aq)    # removing all containers
+        docker rmi -f $(docker images -q)   # removing all images
+        ;;
 esac
 
